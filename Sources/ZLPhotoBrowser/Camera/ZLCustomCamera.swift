@@ -948,8 +948,75 @@ open class ZLCustomCamera: UIViewController {
         recordVideoPlayerLayer?.player?.pause()
         // 置为nil会导致卡顿，先注释，不影响内存释放
 //        self.recordVideoPlayerLayer?.player = nil
-        dismiss(animated: true) {
-            self.takeDoneBlock?(self.takedImage, self.videoURL)
+        
+        let config = ZLPhotoConfiguration.default()
+        
+        // Check if we should push to clip controller for photos
+        let shouldPushClip = config.cameraConfiguration.clipAfterTakingPhoto &&
+                            takedImage != nil &&
+                            videoURL == nil  // Only for photos, not videos
+        
+        if shouldPushClip, let image = takedImage {
+            pushToClipController(with: image)
+        } else {
+            dismiss(animated: true) {
+                self.takeDoneBlock?(self.takedImage, self.videoURL)
+            }
+        }
+    }
+    
+    private func pushToClipController(with image: UIImage) {
+        let config = ZLPhotoConfiguration.default()
+        let clipRatios = config.editImageConfiguration.clipRatios
+        
+        // Create clip controller
+        let clipVC = ZLClipImageViewController(image: image, clipRatios: clipRatios)
+        
+        clipVC.clipDoneBlock = { [weak self] angle, editRect, ratio in
+            guard let self = self else { return }
+            
+            // Apply rotation if needed
+            let rotatedImage: UIImage
+            let normalizedAngle = ((Int(angle) % 360) - 360) % 360
+            if normalizedAngle == -90 {
+                rotatedImage = image.zl.rotate(orientation: .left)
+            } else if normalizedAngle == -180 {
+                rotatedImage = image.zl.rotate(orientation: .down)
+            } else if normalizedAngle == -270 {
+                rotatedImage = image.zl.rotate(orientation: .right)
+            } else {
+                rotatedImage = image
+            }
+            
+            // Crop the image
+            let croppedImage = rotatedImage.zl.clipImage(angle: 0, editRect: editRect, isCircle: ratio.isCircle)
+            
+            // Update the taken image with cropped version
+            self.takedImage = croppedImage
+            
+            // Dismiss the entire camera
+            self.dismiss(animated: true) {
+                self.takeDoneBlock?(croppedImage, nil)
+            }
+        }
+        
+        clipVC.cancelClipBlock = { [weak self] in
+            guard let self = self else { return }
+            
+            // Dismiss the entire camera
+            self.dismiss(animated: true) {
+                self.cancelBlock?()
+            }
+        }
+        
+        // Push onto the navigation stack
+        if let navController = navigationController {
+            navController.pushViewController(clipVC, animated: true)
+        } else {
+            // Fallback: if no navigation controller, present modally
+            let nav = ZLImageNavController(rootViewController: clipVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
         }
     }
     

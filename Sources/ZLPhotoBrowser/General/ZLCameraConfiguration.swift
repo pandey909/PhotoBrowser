@@ -96,6 +96,12 @@ public class ZLCameraConfiguration: NSObject {
     /// If `allowTakePhoto` is true, `tapToRecordVideo` will be ignored.
     public var tapToRecordVideo: Bool = false
     
+    /// When taking a photo with the camera, automatically push to the clip/crop interface. Defaults to false.
+    /// - discussion: When enabled, after taking a photo, the clip controller will be pushed onto the navigation
+    /// stack for a smooth transition. The clip ratios are taken from `editImageConfiguration.clipRatios`.
+    /// Only applies when taking photos (not videos).
+    public var clipAfterTakingPhoto = false
+    
     private var _enableWideCameras: Bool = false
     
     /// Enable the use of wide cameras (e.g., .builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera).
