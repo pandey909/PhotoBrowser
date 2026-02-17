@@ -972,6 +972,9 @@ open class ZLCustomCamera: UIViewController {
         // Create clip controller
         let clipVC = ZLClipImageViewController(image: image, clipRatios: clipRatios)
         
+        // Hide back button in clip controller
+        clipVC.navigationItem.hidesBackButton = true
+        
         clipVC.clipDoneBlock = { [weak self] angle, editRect, ratio in
             guard let self = self else { return }
             
@@ -994,20 +997,48 @@ open class ZLCustomCamera: UIViewController {
             // Update the taken image with cropped version
             self.takedImage = croppedImage
             
-            // Dismiss the entire camera
-            self.dismiss(animated: true) {
-                self.takeDoneBlock?(croppedImage, nil)
+            // Pop back to camera first (to clean up the stack)
+            if let navController = self.navigationController {
+                navController.popViewController(animated: false)
+            }
+            
+            // Then dismiss the entire camera navigation
+            if let presentingVC = self.navigationController?.presentingViewController {
+                presentingVC.dismiss(animated: true) {
+                    self.takeDoneBlock?(croppedImage, nil)
+                }
+            } else {
+                self.dismiss(animated: true) {
+                    self.takeDoneBlock?(croppedImage, nil)
+                }
             }
         }
         
         clipVC.cancelClipBlock = { [weak self] in
             guard let self = self else { return }
             
-            // Dismiss the entire camera
-            self.dismiss(animated: true) {
-                self.cancelBlock?()
+            // Pop back to camera first
+            if let navController = self.navigationController {
+                navController.popViewController(animated: false)
+            }
+            
+            // Then dismiss the entire camera navigation
+            if let presentingVC = self.navigationController?.presentingViewController {
+                presentingVC.dismiss(animated: true) {
+                    self.cancelBlock?()
+                }
+            } else {
+                self.dismiss(animated: true) {
+                    self.cancelBlock?()
+                }
             }
         }
+        
+        // Stop the camera session before pushing (to hide camera view)
+        session.stopRunning()
+        
+        // Hide camera preview
+        view.isHidden = true
         
         // Push onto the navigation stack
         if let navController = navigationController {
