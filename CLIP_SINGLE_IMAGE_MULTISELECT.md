@@ -36,13 +36,13 @@ The clip controller will be automatically presented when **ALL** of the followin
 **Before (without this feature):**
 ```
 User selects 1 image → Taps Done → Picker dismisses → App presents clip controller
-                                    ↑ Jarring transition
+                                    ↑ Jarring transition (modal from bottom)
 ```
 
 **After (with this feature):**
 ```
-User selects 1 image → Taps Done → Clip controller presents from picker → User crops → Picker dismisses with cropped image
-                                    ↑ Smooth transition
+User selects 1 image → Taps Done → Clip controller pushes onto navigation stack → User crops → Picker dismisses with cropped image
+                                    ↑ Smooth horizontal push transition (no modal animation)
 ```
 
 ### User Cancellation
@@ -166,9 +166,9 @@ The implementation intercepts the selection flow in `ZLPhotoPicker.requestSelect
 
 1. Checks if all conditions are met for presenting the clip controller
 2. Fetches the selected image
-3. Presents `ZLClipImageViewController` from the current picker view controller
-4. On completion, creates a `ZLResultModel` with the cropped image and `isEdited = true`
-5. Dismisses the picker and calls the `selectImageBlock`
-6. On cancellation, dismisses the picker and calls the `cancelBlock`
+3. **Pushes** `ZLClipImageViewController` onto the existing navigation stack (no modal animation)
+4. On completion, applies rotation and cropping, creates a `ZLResultModel` with the cropped image and `isEdited = true`
+5. Dismisses the entire picker navigation controller and calls the `selectImageBlock`
+6. On cancellation, dismisses the entire picker navigation controller and calls the `cancelBlock`
 
-This ensures a smooth, native-feeling transition without any intermediate dismissals.
+This ensures a smooth, native-feeling horizontal push transition without any modal animations or intermediate dismissals. The clip controller is pushed onto the same navigation stack as the thumbnail view, creating a seamless flow.
