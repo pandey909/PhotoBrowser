@@ -997,6 +997,9 @@ open class ZLCustomCamera: UIViewController {
             // Update the taken image with cropped version
             self.takedImage = croppedImage
             
+            // Save cropped image to temporary file and get URL
+            let croppedImageURL = self.saveCroppedImageToTemp(croppedImage)
+            
             // Pop back to camera first (to clean up the stack)
             if let navController = self.navigationController {
                 navController.popViewController(animated: false)
@@ -1005,11 +1008,11 @@ open class ZLCustomCamera: UIViewController {
             // Then dismiss the entire camera navigation
             if let presentingVC = self.navigationController?.presentingViewController {
                 presentingVC.dismiss(animated: true) {
-                    self.takeDoneBlock?(croppedImage, nil)
+                    self.takeDoneBlock?(croppedImage, croppedImageURL)
                 }
             } else {
                 self.dismiss(animated: true) {
-                    self.takeDoneBlock?(croppedImage, nil)
+                    self.takeDoneBlock?(croppedImage, croppedImageURL)
                 }
             }
         }
@@ -1048,6 +1051,25 @@ open class ZLCustomCamera: UIViewController {
             let nav = ZLImageNavController(rootViewController: clipVC)
             nav.modalPresentationStyle = .fullScreen
             present(nav, animated: true)
+        }
+    }
+    
+    /// Save cropped image to temporary file and return URL
+    private func saveCroppedImageToTemp(_ image: UIImage) -> URL? {
+        guard let imageData = image.jpegData(compressionQuality: 0.9) else {
+            return nil
+        }
+        
+        let tempDirectory = NSTemporaryDirectory()
+        let fileName = "cropped_\(UUID().uuidString).jpg"
+        let fileURL = URL(fileURLWithPath: tempDirectory).appendingPathComponent(fileName)
+        
+        do {
+            try imageData.write(to: fileURL)
+            return fileURL
+        } catch {
+            zlLoggerInDebug("Failed to save cropped image: \(error)")
+            return nil
         }
     }
     
