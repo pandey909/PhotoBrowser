@@ -125,6 +125,12 @@ public extension ZLPhotoConfiguration {
     }
     
     @discardableResult
+    func clipSingleImageInMultiselect(_ value: Bool) -> ZLPhotoConfiguration {
+        clipSingleImageInMultiselect = value
+        return self
+    }
+    
+    @discardableResult
     func saveNewImageAfterEdit(_ value: Bool) -> ZLPhotoConfiguration {
         saveNewImageAfterEdit = value
         return self

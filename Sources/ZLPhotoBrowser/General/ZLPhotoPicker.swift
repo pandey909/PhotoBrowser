@@ -245,6 +245,23 @@ public class ZLPhotoPicker: NSObject {
             }
         }
         
+        // Check if we should present clip controller for single image selection in multiselect mode
+        let shouldPresentClip = config.clipSingleImageInMultiselect &&
+                                config.allowEditImage &&
+                                config.maxSelectCount > 1 &&
+                                arrSelectedModels.count == 1 &&
+                                arrSelectedModels[0].type == .image &&
+                                viewController != nil
+        
+        if shouldPresentClip {
+            presentClipForSingleSelection(
+                model: arrSelectedModels[0],
+                isSelectOriginal: isSelectOriginal,
+                viewController: viewController!
+            )
+            return
+        }
+        
         let hud = ZLProgressHUD.show(toast: .processing, timeout: ZLPhotoUIConfiguration.default().timeout)
         
         var timeout = false
@@ -319,6 +336,86 @@ public class ZLPhotoPicker: NSObject {
             }
             fetchImageQueue.addOperation(operation)
         }
+    }
+    
+    /// Present clip controller for single image selection in multiselect mode
+    private func presentClipForSingleSelection(
+        model: ZLPhotoModel,
+        isSelectOriginal: Bool,
+        viewController: UIViewController
+    ) {
+        let config = ZLPhotoConfiguration.default()
+        let clipRatios = config.editImageConfiguration.clipRatios
+        
+        // First, fetch the image
+        let hud = ZLProgressHUD.show(toast: .processing, timeout: ZLPhotoUIConfiguration.default().timeout)
+        
+        var timeout = false
+        hud.timeoutBlock = { [weak self] in
+            timeout = true
+            showAlertView(localLanguageTextValue(.timeout), viewController)
+        }
+        
+        let isOriginal = config.allowSelectOriginal ? isSelectOriginal : config.alwaysRequestOriginal
+        
+        let operation = ZLFetchImageOperation(model: model, isOriginal: isOriginal) { [weak self] image, asset in
+            guard !timeout, let self = self, let image = image else {
+                hud.hide()
+                if !timeout {
+                    // Failed to fetch image, dismiss and return empty
+                    viewController.dismiss(animated: true) {
+                        self?.selectImageBlock?([], isOriginal)
+                    }
+                }
+                return
+            }
+            
+            hud.hide()
+            
+            // Create a temporary result model for the clip controller
+            let tempResult = ZLResultModel(
+                asset: asset ?? model.asset,
+                image: image,
+                isEdited: false,
+                editModel: nil,
+                index: 0
+            )
+            
+            // Present clip controller from the current picker view controller
+            ZLClipImageViewController.present(
+                for: tempResult,
+                from: viewController,
+                clipRatios: clipRatios,
+                completion: { [weak self] croppedImage in
+                    guard let self = self else { return }
+                    
+                    // Create the final result model with the cropped image
+                    let finalResult = ZLResultModel(
+                        asset: asset ?? model.asset,
+                        image: croppedImage,
+                        isEdited: true,
+                        editModel: nil,
+                        index: 0
+                    )
+                    
+                    // Dismiss the picker and call the completion
+                    viewController.dismiss(animated: true) {
+                        self.selectImageBlock?([finalResult], isOriginal)
+                    }
+                    
+                    self.arrSelectedModels.removeAll()
+                },
+                onCancel: { [weak self] in
+                    // User cancelled the clip, just dismiss without returning any results
+                    viewController.dismiss(animated: true) {
+                        self?.cancelBlock?()
+                    }
+                    self?.arrSelectedModels.removeAll()
+                }
+            )
+        }
+        
+        fetchImageQueue.addOperation(operation)
     }
 }
 
