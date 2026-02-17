@@ -372,47 +372,67 @@ public class ZLPhotoPicker: NSObject {
             
             hud.hide()
             
-            // Create a temporary result model for the clip controller
-            let tempResult = ZLResultModel(
-                asset: asset ?? model.asset,
-                image: image,
-                isEdited: false,
-                editModel: nil,
-                index: 0
-            )
+            // Create clip controller and push it onto the navigation stack (no modal animation)
+            let clipVC = ZLClipImageViewController(image: image, clipRatios: clipRatios)
             
-            // Present clip controller from the current picker view controller
-            ZLClipImageViewController.present(
-                for: tempResult,
-                from: viewController,
-                clipRatios: clipRatios,
-                completion: { [weak self] croppedImage in
-                    guard let self = self else { return }
-                    
-                    // Create the final result model with the cropped image
-                    let finalResult = ZLResultModel(
-                        asset: asset ?? model.asset,
-                        image: croppedImage,
-                        isEdited: true,
-                        editModel: nil,
-                        index: 0
-                    )
-                    
-                    // Dismiss the picker and call the completion
-                    viewController.dismiss(animated: true) {
-                        self.selectImageBlock?([finalResult], isOriginal)
-                    }
-                    
-                    self.arrSelectedModels.removeAll()
-                },
-                onCancel: { [weak self] in
-                    // User cancelled the clip, just dismiss without returning any results
-                    viewController.dismiss(animated: true) {
-                        self?.cancelBlock?()
-                    }
-                    self?.arrSelectedModels.removeAll()
+            clipVC.clipDoneBlock = { [weak self, weak viewController] angle, editRect, ratio in
+                guard let self = self, let viewController = viewController else { return }
+                
+                // Apply rotation if needed
+                let rotatedImage: UIImage
+                let normalizedAngle = ((Int(angle) % 360) - 360) % 360
+                if normalizedAngle == -90 {
+                    rotatedImage = image.zl.rotate(orientation: .left)
+                } else if normalizedAngle == -180 {
+                    rotatedImage = image.zl.rotate(orientation: .down)
+                } else if normalizedAngle == -270 {
+                    rotatedImage = image.zl.rotate(orientation: .right)
+                } else {
+                    rotatedImage = image
                 }
-            )
+                
+                // Crop the image
+                let croppedImage = rotatedImage.zl.clipImage(angle: 0, editRect: editRect, isCircle: ratio.isCircle)
+                
+                // Create the final result model with the cropped image
+                let finalResult = ZLResultModel(
+                    asset: asset ?? model.asset,
+                    image: croppedImage,
+                    isEdited: true,
+                    editModel: nil,
+                    index: 0
+                )
+                
+                // Dismiss the entire picker navigation controller
+                viewController.dismiss(animated: true) {
+                    self.selectImageBlock?([finalResult], isOriginal)
+                }
+                
+                self.arrSelectedModels.removeAll()
+            }
+            
+            clipVC.cancelClipBlock = { [weak self, weak viewController] in
+                guard let self = self, let viewController = viewController else { return }
+                
+                // Dismiss the entire picker navigation controller
+                viewController.dismiss(animated: true) {
+                    self.cancelBlock?()
+                }
+                
+                self.arrSelectedModels.removeAll()
+            }
+            
+            // Push onto the existing navigation stack for smooth transition
+            if let navController = viewController as? UINavigationController {
+                navController.pushViewController(clipVC, animated: true)
+            } else if let navController = viewController.navigationController {
+                navController.pushViewController(clipVC, animated: true)
+            } else {
+                // Fallback: if no navigation controller, present modally
+                let nav = ZLImageNavController(rootViewController: clipVC)
+                nav.modalPresentationStyle = .fullScreen
+                viewController.present(nav, animated: true)
+            }
         }
         
         fetchImageQueue.addOperation(operation)
