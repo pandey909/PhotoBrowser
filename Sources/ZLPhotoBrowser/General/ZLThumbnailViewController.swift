@@ -1166,6 +1166,77 @@ class ZLThumbnailViewController: UIViewController {
         resetBottomToolBtnStatus()
     }
     
+    private func showClipImageVC(model: ZLPhotoModel) {
+        guard let nav = navigationController as? ZLImageNavController else {
+            zlLoggerInDebug("Navigation controller is null")
+            return
+        }
+        
+        var requestAssetID: PHImageRequestID?
+        
+        let hud = ZLProgressHUD.show(timeout: ZLPhotoUIConfiguration.default().timeout)
+        hud.timeoutBlock = { [weak self] in
+            showAlertView(localLanguageTextValue(.timeout), self)
+            if let requestAssetID = requestAssetID {
+                PHImageManager.default().cancelImageRequest(requestAssetID)
+            }
+        }
+        
+        requestAssetID = ZLPhotoManager.fetchImage(for: model.asset, size: model.previewSize) { [weak self, weak nav] image, isDegraded in
+            guard !isDegraded else {
+                return
+            }
+            
+            hud.hide()
+            
+            if let image = image {
+                let config = ZLPhotoConfiguration.default()
+                let clipRatios = config.editImageConfiguration.clipRatios
+                
+                // Create clip controller
+                let clipVC = ZLClipImageViewController(image: image, clipRatios: clipRatios)
+                clipVC.navigationItem.hidesBackButton = true
+                
+                clipVC.clipDoneBlock = { [weak self, weak nav] angle, editRect, ratio in
+                    // Apply rotation if needed
+                    let rotatedImage: UIImage
+                    let normalizedAngle = ((Int(angle) % 360) - 360) % 360
+                    if normalizedAngle == -90 {
+                        rotatedImage = image.zl.rotate(orientation: .left)
+                    } else if normalizedAngle == -180 {
+                        rotatedImage = image.zl.rotate(orientation: .down)
+                    } else if normalizedAngle == -270 {
+                        rotatedImage = image.zl.rotate(orientation: .right)
+                    } else {
+                        rotatedImage = image
+                    }
+                    
+                    // Crop the image
+                    let croppedImage = rotatedImage.zl.clipImage(angle: 0, editRect: editRect, isCircle: ratio.isCircle)
+                    
+                    // Update model
+                    model.isSelected = true
+                    model.editImage = croppedImage
+                    nav?.arrSelectedModels.append(model)
+                    ZLPhotoConfiguration.default().didSelectAsset?(model.asset)
+                    
+                    // Pop back and call done
+                    nav?.popViewController(animated: false)
+                    self?.doneBtnClick()
+                }
+                
+                clipVC.cancelClipBlock = { [weak nav] in
+                    nav?.popViewController(animated: true)
+                }
+                
+                // Push onto navigation stack
+                nav?.pushViewController(clipVC, animated: true)
+            } else {
+                showAlertView(localLanguageTextValue(.imageLoadFailed), self)
+            }
+        }
+    }
+    
     private func showEditImageVC(model: ZLPhotoModel) {
         guard let nav = navigationController as? ZLImageNavController else {
             zlLoggerInDebug("Navigation controller is null")
@@ -1496,6 +1567,12 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
     private func shouldDirectEdit(_ model: ZLPhotoModel) -> Bool {
         let config = ZLPhotoConfiguration.default()
         
+        // Check for clip-only mode (new feature)
+        let canClipImage = config.clipAfterSelectInSingleMode &&
+            config.allowEditImage &&
+            config.maxSelectCount == 1 &&
+            model.type.rawValue < ZLPhotoModel.MediaType.video.rawValue
+        
         let canEditImage = config.editAfterSelectThumbnailImage &&
             config.allowEditImage &&
             config.maxSelectCount == 1 &&
@@ -1511,13 +1588,15 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         let arrSelectedModels = nav?.arrSelectedModels ?? []
         let flag = arrSelectedModels.isEmpty || (arrSelectedModels.count == 1 && arrSelectedModels.first?.ident == model.ident)
         
-        if canEditImage, flag {
+        if canClipImage, flag {
+            showClipImageVC(model: model)
+        } else if canEditImage, flag {
             showEditImageVC(model: model)
         } else if canEditVideo, flag {
             showEditVideoVC(model: model)
         }
         
-        return flag && (canEditImage || canEditVideo)
+        return flag && (canClipImage || canEditImage || canEditVideo)
     }
     
     private func setCellIndex(_ cell: ZLThumbnailPhotoCell?, showIndexLabel: Bool, index: Int) {
