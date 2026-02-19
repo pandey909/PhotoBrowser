@@ -147,7 +147,10 @@ class ZLClipOverlayView: UIView {
         let path = UIBezierPath(rect: shadowView.frame)
         let transparentPath: UIBezierPath
         if isCircle {
-            transparentPath = UIBezierPath(roundedRect: cropRect, cornerRadius: cropRect.width / 2)
+            // Use a square rect so the circle is never oval (e.g. portrait images)
+            let side = min(cropRect.width, cropRect.height)
+            let rect = CGRect(x: cropRect.midX - side / 2, y: cropRect.midY - side / 2, width: side, height: side)
+            transparentPath = UIBezierPath(roundedRect: rect, cornerRadius: side / 2)
         } else {
             transparentPath = UIBezierPath(rect: cropRect)
         }
@@ -229,7 +232,15 @@ class ZLClipOverlayView: UIView {
         cropRect = rect
         
         let shadowMaskPath = getShadowMaskLayerPath()
-        let frameBorderPath = UIBezierPath(rect: rect)
+        // For circle use a square so border and mask are true circles (not oval on portrait)
+        let frameBorderPath: UIBezierPath
+        if isCircle {
+            let side = min(rect.width, rect.height)
+            let squareRect = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
+            frameBorderPath = UIBezierPath(ovalIn: squareRect)
+        } else {
+            frameBorderPath = UIBezierPath(rect: rect)
+        }
         let cornerLinesPath = getCornerLinesLayerPath()
         let gridLinesPath = getGridLinesLayerPath()
         

@@ -608,6 +608,14 @@ public class ZLClipImageViewController: UIViewController {
         frame.size.height = max(minClipSize.height, min(frame.height, maxH))
 //        frame.size.height = floor(max(self.minClipSize.height, min(frame.height, maxH)))
         
+        // Keep circle crop as a true circle: force square so portrait images don't show oval
+        if selectedRatio.isCircle {
+            let side = min(frame.width, frame.height)
+            frame.size = CGSize(width: side, height: side)
+            frame.origin.x = max(maxClipFrame.minX, min(frame.origin.x, maxClipFrame.maxX - side))
+            frame.origin.y = max(maxClipFrame.minY, min(frame.origin.y, maxClipFrame.maxY - side))
+        }
+        
         clipBoxFrame = frame
         overlayView.updateLayers(frame, animate: animate, endEditing: endEditing)
         
