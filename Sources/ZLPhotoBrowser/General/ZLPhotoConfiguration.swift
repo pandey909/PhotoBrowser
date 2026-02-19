@@ -157,6 +157,18 @@ public class ZLPhotoConfiguration: NSObject {
     /// Editing video is only valid when allowEditVideo is true and maxSelectCount is 1.
     public var editAfterSelectThumbnailImage = false
     
+    /// Enable direct clip flow (skip ZLEditImageViewController and go directly to ZLClipImageViewController). Defaults to false.
+    /// When enabled, tapping a thumbnail in single-selection mode opens the crop screen directly.
+    /// Only valid when maxSelectCount is 1 and allowEditImage is true.
+    /// The first ratio from editImageConfiguration.clipRatios will be used as the default.
+    public var enableDirectClipFlow = false
+    
+    /// When in multiselect mode (maxSelectCount > 1), if user selects exactly one image and taps Done,
+    /// present the clip/crop interface before dismissing the picker. Defaults to false.
+    /// - discussion: Only applies when maxSelectCount > 1, allowEditImage is true, and exactly one image (not video) is selected.
+    /// The clip interface will be presented from the current picker view controller for a smooth transition.
+    public var clipSingleImageInMultiselect = false
+    
     /// Save the edited image to the album after editing. Defaults to true.
     public var saveNewImageAfterEdit = true
     

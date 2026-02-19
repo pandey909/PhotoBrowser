@@ -245,6 +245,23 @@ public class ZLPhotoPicker: NSObject {
             }
         }
         
+        // Check if we should present clip controller for single image selection in multiselect mode
+        let shouldPresentClip = config.clipSingleImageInMultiselect &&
+                                config.allowEditImage &&
+                                config.maxSelectCount > 1 &&
+                                arrSelectedModels.count == 1 &&
+                                arrSelectedModels[0].type == .image &&
+                                viewController != nil
+        
+        if shouldPresentClip {
+            presentClipForSingleSelection(
+                model: arrSelectedModels[0],
+                isSelectOriginal: isSelectOriginal,
+                viewController: viewController!
+            )
+            return
+        }
+        
         let hud = ZLProgressHUD.show(toast: .processing, timeout: ZLPhotoUIConfiguration.default().timeout)
         
         var timeout = false
@@ -319,6 +336,106 @@ public class ZLPhotoPicker: NSObject {
             }
             fetchImageQueue.addOperation(operation)
         }
+    }
+    
+    /// Present clip controller for single image selection in multiselect mode
+    private func presentClipForSingleSelection(
+        model: ZLPhotoModel,
+        isSelectOriginal: Bool,
+        viewController: UIViewController
+    ) {
+        let config = ZLPhotoConfiguration.default()
+        let clipRatios = config.editImageConfiguration.clipRatios
+        
+        // First, fetch the image
+        let hud = ZLProgressHUD.show(toast: .processing, timeout: ZLPhotoUIConfiguration.default().timeout)
+        
+        var timeout = false
+        hud.timeoutBlock = { [weak self] in
+            timeout = true
+            showAlertView(localLanguageTextValue(.timeout), viewController)
+        }
+        
+        let isOriginal = config.allowSelectOriginal ? isSelectOriginal : config.alwaysRequestOriginal
+        
+        let operation = ZLFetchImageOperation(model: model, isOriginal: isOriginal) { [weak self] image, asset in
+            guard !timeout, let self = self, let image = image else {
+                hud.hide()
+                if !timeout {
+                    // Failed to fetch image, dismiss and return empty
+                    viewController.dismiss(animated: true) {
+                        self?.selectImageBlock?([], isOriginal)
+                    }
+                }
+                return
+            }
+            
+            hud.hide()
+            
+            // Create clip controller and push it onto the navigation stack (no modal animation)
+            let clipVC = ZLClipImageViewController(image: image, clipRatios: clipRatios)
+            
+            clipVC.clipDoneBlock = { [weak self, weak viewController] angle, editRect, ratio in
+                guard let self = self, let viewController = viewController else { return }
+                
+                // Apply rotation if needed
+                let rotatedImage: UIImage
+                let normalizedAngle = ((Int(angle) % 360) - 360) % 360
+                if normalizedAngle == -90 {
+                    rotatedImage = image.zl.rotate(orientation: .left)
+                } else if normalizedAngle == -180 {
+                    rotatedImage = image.zl.rotate(orientation: .down)
+                } else if normalizedAngle == -270 {
+                    rotatedImage = image.zl.rotate(orientation: .right)
+                } else {
+                    rotatedImage = image
+                }
+                
+                // Crop the image
+                let croppedImage = rotatedImage.zl.clipImage(angle: 0, editRect: editRect, isCircle: ratio.isCircle)
+                
+                // Create the final result model with the cropped image
+                let finalResult = ZLResultModel(
+                    asset: asset ?? model.asset,
+                    image: croppedImage,
+                    isEdited: true,
+                    editModel: nil,
+                    index: 0
+                )
+                
+                // Dismiss the entire picker navigation controller
+                viewController.dismiss(animated: true) {
+                    self.selectImageBlock?([finalResult], isOriginal)
+                }
+                
+                self.arrSelectedModels.removeAll()
+            }
+            
+            clipVC.cancelClipBlock = { [weak self, weak viewController] in
+                guard let self = self, let viewController = viewController else { return }
+                
+                // Dismiss the entire picker navigation controller
+                viewController.dismiss(animated: true) {
+                    self.cancelBlock?()
+                }
+                
+                self.arrSelectedModels.removeAll()
+            }
+            
+            // Push onto the existing navigation stack for smooth transition
+            if let navController = viewController as? UINavigationController {
+                navController.pushViewController(clipVC, animated: true)
+            } else if let navController = viewController.navigationController {
+                navController.pushViewController(clipVC, animated: true)
+            } else {
+                // Fallback: if no navigation controller, present modally
+                let nav = ZLImageNavController(rootViewController: clipVC)
+                nav.modalPresentationStyle = .fullScreen
+                viewController.present(nav, animated: true)
+            }
+        }
+        
+        fetchImageQueue.addOperation(operation)
     }
 }
 

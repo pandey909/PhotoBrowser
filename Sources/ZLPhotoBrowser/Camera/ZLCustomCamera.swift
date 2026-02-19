@@ -948,8 +948,159 @@ open class ZLCustomCamera: UIViewController {
         recordVideoPlayerLayer?.player?.pause()
         // 置为nil会导致卡顿，先注释，不影响内存释放
 //        self.recordVideoPlayerLayer?.player = nil
-        dismiss(animated: true) {
-            self.takeDoneBlock?(self.takedImage, self.videoURL)
+        
+        let config = ZLPhotoConfiguration.default()
+        
+        // Check if we should push to clip controller for photos
+        let shouldPushClip = config.cameraConfiguration.clipAfterTakingPhoto &&
+                            takedImage != nil &&
+                            videoURL == nil  // Only for photos, not videos
+        
+        if shouldPushClip, let image = takedImage {
+            pushToClipController(with: image)
+        } else {
+            dismiss(animated: true) {
+                self.takeDoneBlock?(self.takedImage, self.videoURL)
+            }
+        }
+    }
+    
+    private func pushToClipController(with image: UIImage) {
+        let config = ZLPhotoConfiguration.default()
+        let clipRatios = config.editImageConfiguration.clipRatios
+        
+        // Calculate proper editRect based on the first ratio
+        let imageSize = image.size
+        var editRect: CGRect
+        let firstRatio = clipRatios.first
+        
+        if let ratio = firstRatio {
+            if ratio.whRatio == 0 {
+                // Custom ratio - use full image
+                editRect = CGRect(origin: .zero, size: imageSize)
+            } else {
+                // Fixed ratio - calculate centered crop rect
+                let imageWHRatio = imageSize.width / imageSize.height
+                var w: CGFloat = 0, h: CGFloat = 0
+                
+                if ratio.whRatio >= imageWHRatio {
+                    w = imageSize.width
+                    h = w / ratio.whRatio
+                } else {
+                    h = imageSize.height
+                    w = h * ratio.whRatio
+                }
+                
+                editRect = CGRect(x: (imageSize.width - w) / 2, y: (imageSize.height - h) / 2, width: w, height: h)
+            }
+        } else {
+            editRect = CGRect(origin: .zero, size: imageSize)
+        }
+        
+        var clipStatus = ZLClipStatus(editRect: editRect)
+        clipStatus.ratio = firstRatio
+        
+        // Create clip controller
+        let clipVC = ZLClipImageViewController(image: image, status: clipStatus, clipRatios: clipRatios)
+        
+        // Hide back button in clip controller
+        clipVC.navigationItem.hidesBackButton = true
+        
+        clipVC.clipDoneBlock = { [weak self] angle, editRect, ratio in
+            guard let self = self else { return }
+            
+            // Apply rotation if needed
+            let rotatedImage: UIImage
+            let normalizedAngle = ((Int(angle) % 360) - 360) % 360
+            if normalizedAngle == -90 {
+                rotatedImage = image.zl.rotate(orientation: .left)
+            } else if normalizedAngle == -180 {
+                rotatedImage = image.zl.rotate(orientation: .down)
+            } else if normalizedAngle == -270 {
+                rotatedImage = image.zl.rotate(orientation: .right)
+            } else {
+                rotatedImage = image
+            }
+            
+            // Crop the image
+            let croppedImage = rotatedImage.zl.clipImage(angle: 0, editRect: editRect, isCircle: ratio.isCircle)
+            
+            // Update the taken image with cropped version
+            self.takedImage = croppedImage
+            
+            // Save cropped image to temporary file and get URL
+            let croppedImageURL = self.saveCroppedImageToTemp(croppedImage)
+            
+            // Pop back to camera first (to clean up the stack)
+            if let navController = self.navigationController {
+                navController.popViewController(animated: false)
+            }
+            
+            // Then dismiss the entire camera navigation
+            if let presentingVC = self.navigationController?.presentingViewController {
+                presentingVC.dismiss(animated: true) {
+                    self.takeDoneBlock?(croppedImage, croppedImageURL)
+                }
+            } else {
+                self.dismiss(animated: true) {
+                    self.takeDoneBlock?(croppedImage, croppedImageURL)
+                }
+            }
+        }
+        
+        clipVC.cancelClipBlock = { [weak self] in
+            guard let self = self else { return }
+            
+            // Pop back to camera first
+            if let navController = self.navigationController {
+                navController.popViewController(animated: false)
+            }
+            
+            // Then dismiss the entire camera navigation
+            if let presentingVC = self.navigationController?.presentingViewController {
+                presentingVC.dismiss(animated: true) {
+                    self.cancelBlock?()
+                }
+            } else {
+                self.dismiss(animated: true) {
+                    self.cancelBlock?()
+                }
+            }
+        }
+        
+        // Stop the camera session before pushing (to hide camera view)
+        session.stopRunning()
+        
+        // Hide camera preview
+        view.isHidden = true
+        
+        // Push onto the navigation stack
+        if let navController = navigationController {
+            navController.pushViewController(clipVC, animated: true)
+        } else {
+            // Fallback: if no navigation controller, present modally
+            let nav = ZLImageNavController(rootViewController: clipVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        }
+    }
+    
+    /// Save cropped image to temporary file and return URL
+    private func saveCroppedImageToTemp(_ image: UIImage) -> URL? {
+        guard let imageData = image.jpegData(compressionQuality: 0.9) else {
+            return nil
+        }
+        
+        let tempDirectory = NSTemporaryDirectory()
+        let fileName = "cropped_\(UUID().uuidString).jpg"
+        let fileURL = URL(fileURLWithPath: tempDirectory).appendingPathComponent(fileName)
+        
+        do {
+            try imageData.write(to: fileURL)
+            return fileURL
+        } catch {
+            zlLoggerInDebug("Failed to save cropped image: \(error)")
+            return nil
         }
     }
     

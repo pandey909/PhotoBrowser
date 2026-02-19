@@ -1454,16 +1454,7 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         let config = ZLPhotoConfiguration.default()
         let uiConfig = ZLPhotoUIConfiguration.default()
         
-        if !config.allowPreviewPhotos {
-            cell.btnSelectClick()
-            return
-        }
-        
-        // 不允许选择，且上面有蒙层时，不准点击
-        if !cell.enableSelect, uiConfig.showInvalidMask {
-            return
-        }
-        
+        // Get the model first to check for direct clip
         var index = indexPath.row
         if !uiConfig.sortAscending {
             index -= offset
@@ -1474,6 +1465,23 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         }
         
         let m = arrDataSources[index]
+        
+        // Direct clip: go straight to crop when enabled (single image, allowEditImage, clip ratios set)
+        // This must be checked BEFORE allowPreviewPhotos check
+        if shouldDirectClip(m) {
+            return
+        }
+        
+        if !config.allowPreviewPhotos {
+            cell.btnSelectClick()
+            return
+        }
+        
+        // 不允许选择，且上面有蒙层时，不准点击
+        if !cell.enableSelect, uiConfig.showInvalidMask {
+            return
+        }
+        
         if shouldDirectEdit(m) {
             return
         }
@@ -1518,6 +1526,105 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         }
         
         return flag && (canEditImage || canEditVideo)
+    }
+    
+    private func shouldDirectClip(_ model: ZLPhotoModel) -> Bool {
+        let config = ZLPhotoConfiguration.default()
+        
+        guard config.enableDirectClipFlow else { return false }
+        guard config.allowEditImage else { return false }
+        guard config.maxSelectCount == 1 else { return false }
+        guard model.type.rawValue < ZLPhotoModel.MediaType.video.rawValue else { return false }
+        
+        let nav = navigationController as? ZLImageNavController
+        let arrSelectedModels = nav?.arrSelectedModels ?? []
+        let flag = arrSelectedModels.isEmpty || (arrSelectedModels.count == 1 && arrSelectedModels.first?.ident == model.ident)
+        
+        if flag {
+            showDirectClipVC(model: model)
+        }
+        return flag
+    }
+    
+    private func showDirectClipVC(model: ZLPhotoModel) {
+        guard let nav = navigationController as? ZLImageNavController else {
+            return
+        }
+        
+        var requestAssetID: PHImageRequestID?
+        
+        let hud = ZLProgressHUD.show(timeout: ZLPhotoUIConfiguration.default().timeout)
+        hud.timeoutBlock = { [weak self] in
+            showAlertView(localLanguageTextValue(.timeout), self)
+            if let requestAssetID = requestAssetID {
+                PHImageManager.default().cancelImageRequest(requestAssetID)
+            }
+        }
+        
+        requestAssetID = ZLPhotoManager.fetchImage(for: model.asset, size: model.previewSize) { [weak self, weak nav] image, isDegraded in
+            guard !isDegraded else {
+                return
+            }
+            if let image = image {
+                self?.presentDirectClipVC(image: image, model: model, nav: nav)
+            } else {
+                showAlertView(localLanguageTextValue(.imageLoadFailed), self)
+            }
+            hud.hide()
+        }
+    }
+    
+    private func presentDirectClipVC(image: UIImage, model: ZLPhotoModel, nav: ZLImageNavController?) {
+        let config = ZLPhotoConfiguration.default()
+        let editConfig = config.editImageConfiguration
+        
+        // Calculate proper editRect based on the first ratio
+        let imageSize = image.size
+        var editRect: CGRect
+        let firstRatio = editConfig.clipRatios.first
+        
+        if let ratio = firstRatio {
+            if ratio.whRatio == 0 {
+                // Custom ratio - use full image
+                editRect = CGRect(origin: .zero, size: imageSize)
+            } else {
+                // Fixed ratio - calculate centered crop rect
+                let imageWHRatio = imageSize.width / imageSize.height
+                var w: CGFloat = 0, h: CGFloat = 0
+                
+                if ratio.whRatio >= imageWHRatio {
+                    w = imageSize.width
+                    h = w / ratio.whRatio
+                } else {
+                    h = imageSize.height
+                    w = h * ratio.whRatio
+                }
+                
+                editRect = CGRect(x: (imageSize.width - w) / 2, y: (imageSize.height - h) / 2, width: w, height: h)
+            }
+        } else {
+            editRect = CGRect(origin: .zero, size: imageSize)
+        }
+        
+        let clipStatus = ZLClipStatus(editRect: editRect, angle: 0, ratio: firstRatio)
+        
+        let clipVC = ZLClipImageViewController(image: image, status: clipStatus, clipRatios: editConfig.clipRatios)
+        
+        clipVC.clipDoneBlock = { [weak self, weak nav] angle, editRect, ratio in
+            let clippedImage = image.zl.clipImage(angle: angle, editRect: editRect, isCircle: ratio.isCircle)
+            let editModel = ZLEditImageModel(clipStatus: ZLClipStatus(editRect: editRect, angle: angle, ratio: ratio))
+            model.isSelected = true
+            model.editImage = clippedImage
+            model.editImageModel = editModel
+            nav?.arrSelectedModels.append(model)
+            ZLPhotoConfiguration.default().didSelectAsset?(model.asset)
+            self?.doneBtnClick()
+        }
+        
+        clipVC.cancelClipBlock = { }
+        
+        clipVC.modalPresentationStyle = .fullScreen
+        nav?.present(clipVC, animated: true, completion: nil)
     }
     
     private func setCellIndex(_ cell: ZLThumbnailPhotoCell?, showIndexLabel: Bool, index: Int) {

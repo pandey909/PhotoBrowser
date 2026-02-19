@@ -125,6 +125,18 @@ public extension ZLPhotoConfiguration {
     }
     
     @discardableResult
+    func enableDirectClipFlow(_ value: Bool) -> ZLPhotoConfiguration {
+        enableDirectClipFlow = value
+        return self
+    }
+    
+    @discardableResult
+    func clipSingleImageInMultiselect(_ value: Bool) -> ZLPhotoConfiguration {
+        clipSingleImageInMultiselect = value
+        return self
+    }
+    
+    @discardableResult
     func saveNewImageAfterEdit(_ value: Bool) -> ZLPhotoConfiguration {
         saveNewImageAfterEdit = value
         return self

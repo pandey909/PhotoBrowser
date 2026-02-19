@@ -469,8 +469,12 @@ public class ZLClipImageViewController: UIViewController {
             view.addSubview(animateImageView)
         }
         
-        view.addGestureRecognizer(gridPanGes)
-        mainScrollView.panGestureRecognizer.require(toFail: gridPanGes)
+        // Only allow resizing crop frame if there are multiple ratios or custom ratio is available
+        let allowCustomCrop = clipRatios.count > 1 || clipRatios.contains(where: { $0.whRatio == 0 })
+        if allowCustomCrop {
+            view.addGestureRecognizer(gridPanGes)
+            mainScrollView.panGestureRecognizer.require(toFail: gridPanGes)
+        }
         
         mainScrollView.alpha = 0
         overlayView.alpha = 0
@@ -607,6 +611,14 @@ public class ZLClipImageViewController: UIViewController {
         let maxH = maxClipFrame.height + maxClipFrame.minY - frame.minY
         frame.size.height = max(minClipSize.height, min(frame.height, maxH))
 //        frame.size.height = floor(max(self.minClipSize.height, min(frame.height, maxH)))
+        
+        // Keep circle crop as a true circle: force square so portrait images don't show oval
+        if selectedRatio.isCircle {
+            let side = min(frame.width, frame.height)
+            frame.size = CGSize(width: side, height: side)
+            frame.origin.x = max(maxClipFrame.minX, min(frame.origin.x, maxClipFrame.maxX - side))
+            frame.origin.y = max(maxClipFrame.minY, min(frame.origin.y, maxClipFrame.maxY - side))
+        }
         
         clipBoxFrame = frame
         overlayView.updateLayers(frame, animate: animate, endEditing: endEditing)
