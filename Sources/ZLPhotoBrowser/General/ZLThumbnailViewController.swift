@@ -1474,6 +1474,12 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         }
         
         let m = arrDataSources[index]
+        
+        // Direct clip: go straight to crop when enabled (single image, allowEditImage, clip ratios set)
+        if shouldDirectClip(m) {
+            return
+        }
+        
         if shouldDirectEdit(m) {
             return
         }
@@ -1518,6 +1524,77 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         }
         
         return flag && (canEditImage || canEditVideo)
+    }
+    
+    private func shouldDirectClip(_ model: ZLPhotoModel) -> Bool {
+        let config = ZLPhotoConfiguration.default()
+        
+        guard config.enableDirectClipFlow else { return false }
+        guard config.allowEditImage else { return false }
+        guard config.maxSelectCount == 1 else { return false }
+        guard model.type.rawValue < ZLPhotoModel.MediaType.video.rawValue else { return false }
+        
+        let nav = navigationController as? ZLImageNavController
+        let arrSelectedModels = nav?.arrSelectedModels ?? []
+        let flag = arrSelectedModels.isEmpty || (arrSelectedModels.count == 1 && arrSelectedModels.first?.ident == model.ident)
+        
+        if flag {
+            showDirectClipVC(model: model)
+        }
+        return flag
+    }
+    
+    private func showDirectClipVC(model: ZLPhotoModel) {
+        guard let nav = navigationController as? ZLImageNavController else {
+            return
+        }
+        
+        var requestAssetID: PHImageRequestID?
+        
+        let hud = ZLProgressHUD.show(timeout: ZLPhotoUIConfiguration.default().timeout)
+        hud.timeoutBlock = { [weak self] in
+            showAlertView(localLanguageTextValue(.timeout), self)
+            if let requestAssetID = requestAssetID {
+                PHImageManager.default().cancelImageRequest(requestAssetID)
+            }
+        }
+        
+        requestAssetID = ZLPhotoManager.fetchImage(for: model.asset, size: model.previewSize) { [weak self, weak nav] image, isDegraded in
+            guard !isDegraded else {
+                return
+            }
+            if let image = image {
+                self?.presentDirectClipVC(image: image, model: model, nav: nav)
+            } else {
+                showAlertView(localLanguageTextValue(.imageLoadFailed), self)
+            }
+            hud.hide()
+        }
+    }
+    
+    private func presentDirectClipVC(image: UIImage, model: ZLPhotoModel, nav: ZLImageNavController?) {
+        let config = ZLPhotoConfiguration.default()
+        let editConfig = config.editImageConfiguration
+        
+        let clipStatus = ZLClipStatus(editRect: CGRect(origin: .zero, size: image.size), angle: 0, ratio: editConfig.clipRatios.first)
+        
+        let clipVC = ZLClipImageViewController(image: image, status: clipStatus, clipRatios: editConfig.clipRatios)
+        
+        clipVC.clipDoneBlock = { [weak self, weak nav] angle, editRect, ratio in
+            let clippedImage = image.zl.clipImage(angle: angle, editRect: editRect, isCircle: ratio.isCircle)
+            let editModel = ZLEditImageModel(clipStatus: ZLClipStatus(editRect: editRect, angle: angle, ratio: ratio))
+            model.isSelected = true
+            model.editImage = clippedImage
+            model.editImageModel = editModel
+            nav?.arrSelectedModels.append(model)
+            ZLPhotoConfiguration.default().didSelectAsset?(model.asset)
+            self?.doneBtnClick()
+        }
+        
+        clipVC.cancelClipBlock = { }
+        
+        clipVC.modalPresentationStyle = .fullScreen
+        nav?.present(clipVC, animated: true, completion: nil)
     }
     
     private func setCellIndex(_ cell: ZLThumbnailPhotoCell?, showIndexLabel: Bool, index: Int) {
