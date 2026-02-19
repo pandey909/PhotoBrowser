@@ -469,8 +469,12 @@ public class ZLClipImageViewController: UIViewController {
             view.addSubview(animateImageView)
         }
         
-        view.addGestureRecognizer(gridPanGes)
-        mainScrollView.panGestureRecognizer.require(toFail: gridPanGes)
+        // Only allow resizing crop frame if there are multiple ratios or custom ratio is available
+        let allowCustomCrop = clipRatios.count > 1 || clipRatios.contains(where: { $0.whRatio == 0 })
+        if allowCustomCrop {
+            view.addGestureRecognizer(gridPanGes)
+            mainScrollView.panGestureRecognizer.require(toFail: gridPanGes)
+        }
         
         mainScrollView.alpha = 0
         overlayView.alpha = 0

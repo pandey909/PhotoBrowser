@@ -969,8 +969,39 @@ open class ZLCustomCamera: UIViewController {
         let config = ZLPhotoConfiguration.default()
         let clipRatios = config.editImageConfiguration.clipRatios
         
+        // Calculate proper editRect based on the first ratio
+        let imageSize = image.size
+        var editRect: CGRect
+        let firstRatio = clipRatios.first
+        
+        if let ratio = firstRatio {
+            if ratio.whRatio == 0 {
+                // Custom ratio - use full image
+                editRect = CGRect(origin: .zero, size: imageSize)
+            } else {
+                // Fixed ratio - calculate centered crop rect
+                let imageWHRatio = imageSize.width / imageSize.height
+                var w: CGFloat = 0, h: CGFloat = 0
+                
+                if ratio.whRatio >= imageWHRatio {
+                    w = imageSize.width
+                    h = w / ratio.whRatio
+                } else {
+                    h = imageSize.height
+                    w = h * ratio.whRatio
+                }
+                
+                editRect = CGRect(x: (imageSize.width - w) / 2, y: (imageSize.height - h) / 2, width: w, height: h)
+            }
+        } else {
+            editRect = CGRect(origin: .zero, size: imageSize)
+        }
+        
+        var clipStatus = ZLClipStatus(editRect: editRect)
+        clipStatus.ratio = firstRatio
+        
         // Create clip controller
-        let clipVC = ZLClipImageViewController(image: image, clipRatios: clipRatios)
+        let clipVC = ZLClipImageViewController(image: image, status: clipStatus, clipRatios: clipRatios)
         
         // Hide back button in clip controller
         clipVC.navigationItem.hidesBackButton = true
