@@ -1454,16 +1454,7 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         let config = ZLPhotoConfiguration.default()
         let uiConfig = ZLPhotoUIConfiguration.default()
         
-        if !config.allowPreviewPhotos {
-            cell.btnSelectClick()
-            return
-        }
-        
-        // 不允许选择，且上面有蒙层时，不准点击
-        if !cell.enableSelect, uiConfig.showInvalidMask {
-            return
-        }
-        
+        // Get the model first to check for direct clip
         var index = indexPath.row
         if !uiConfig.sortAscending {
             index -= offset
@@ -1476,7 +1467,18 @@ extension ZLThumbnailViewController: UICollectionViewDataSource, UICollectionVie
         let m = arrDataSources[index]
         
         // Direct clip: go straight to crop when enabled (single image, allowEditImage, clip ratios set)
+        // This must be checked BEFORE allowPreviewPhotos check
         if shouldDirectClip(m) {
+            return
+        }
+        
+        if !config.allowPreviewPhotos {
+            cell.btnSelectClick()
+            return
+        }
+        
+        // 不允许选择，且上面有蒙层时，不准点击
+        if !cell.enableSelect, uiConfig.showInvalidMask {
             return
         }
         
