@@ -78,3 +78,4 @@
 
 "noTitleAlbumListPlaceholder" = "所有照片";
 "textStickerRemoveTips" = "拖到此處刪除";
+"iCloudSyncFailed" = "請在設定中登入iCloud以開啟同步功能。";

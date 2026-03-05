@@ -1176,7 +1176,21 @@ class ZLThumbnailViewController: UIViewController {
         
         let hud = ZLProgressHUD.show(timeout: ZLPhotoUIConfiguration.default().timeout)
         hud.timeoutBlock = { [weak self] in
-            showAlertView(localLanguageTextValue(.timeout), self)
+            if model.asset.zl.isInCloud {
+                let alertMsg = String(format: localLanguageTextValue(.iCloudSyncFailed), getAppName())
+                let okAction = ZLCustomAlertAction(title: localLanguageTextValue(.ok), style: .default, handler: nil)
+                let settingsAction = ZLCustomAlertAction(title: localLanguageTextValue(.gotoSettings), style: .default) { _ in
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                    }
+                }
+                ZLMainAsync {
+                    showAlertController(title: localLanguageTextValue(.timeout), message: alertMsg, style: .alert, actions: [settingsAction, okAction], sender: self)
+                }
+            } else {
+                showAlertView(localLanguageTextValue(.timeout), self)
+            }
+            
             if let requestAssetID = requestAssetID {
                 PHImageManager.default().cancelImageRequest(requestAssetID)
             }

@@ -78,3 +78,4 @@
 
 "noTitleAlbumListPlaceholder" = "Toutes les photos";
 "textStickerRemoveTips" = "Faites glisser ici pour supprimer";
+"iCloudSyncFailed" = "Veuillez vous assurer d'être connecté à iCloud dans les Réglages pour télécharger les photos originales.";

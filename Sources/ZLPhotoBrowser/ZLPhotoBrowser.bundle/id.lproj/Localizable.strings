@@ -78,3 +78,4 @@
 
 "noTitleAlbumListPlaceholder" = "Semua Foto";
 "textStickerRemoveTips" = "Seret ke sini untuk menghapus";
+"iCloudSyncFailed" = "Harap pastikan Anda masuk ke iCloud di Pengaturan untuk mengunduh foto asli.";

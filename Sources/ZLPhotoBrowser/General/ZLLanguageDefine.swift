@@ -287,6 +287,9 @@ public struct ZLLocalLanguageKey: Hashable {
     /// loading failed (图片加载失败)
     public static let imageLoadFailed = ZLLocalLanguageKey(rawValue: "imageLoadFailed")
     
+    /// Please ensure you are signed into iCloud in Settings to download original photos. (请在设置中登录iCloud以开启同步功能。)
+    public static let iCloudSyncFailed = ZLLocalLanguageKey(rawValue: "iCloudSyncFailed")
+    
     /// Tap to take photo and hold to record video (轻触拍照，按住摄像)
     public static let customCameraTips = ZLLocalLanguageKey(rawValue: "customCameraTips")
     

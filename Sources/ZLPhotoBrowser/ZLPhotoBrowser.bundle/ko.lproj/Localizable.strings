@@ -78,3 +78,4 @@
 
 "noTitleAlbumListPlaceholder" = "모든 사진";
 "textStickerRemoveTips" = "제거하려면 여기로 드래그하세요";
+"iCloudSyncFailed" = "원본 사진을 다운로드하려면 설정에서 iCloud에 로그인되어 있는지 확인하세요.";

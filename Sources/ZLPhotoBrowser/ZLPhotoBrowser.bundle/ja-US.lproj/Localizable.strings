@@ -78,3 +78,4 @@
 
 "noTitleAlbumListPlaceholder" = "画像すべて";
 "textStickerRemoveTips" = "ここにドラッグして削除します";
+"iCloudSyncFailed" = "オリジナルの写真をダウンロードするには、設定でiCloudにサインインしていることを確認してください。";

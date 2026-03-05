@@ -78,3 +78,4 @@
 
 "noTitleAlbumListPlaceholder" = "Tüm Fotoğraflar";
 "textStickerRemoveTips" = "Kaldırmak için buraya sürükleyin";
+"iCloudSyncFailed" = "Orijinal fotoğrafları indirmek için Ayarlar'da iCloud'a giriş yaptığınızdan emin olun.";

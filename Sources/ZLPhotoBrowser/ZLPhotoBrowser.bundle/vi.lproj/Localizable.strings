@@ -78,3 +78,4 @@
 
 "noTitleAlbumListPlaceholder" = "Tất cả ảnh";
 "textStickerRemoveTips" = "Kéo vào đây để xóa";
+"iCloudSyncFailed" = "Vui lòng đảm bảo bạn đã đăng nhập vào iCloud trong Cài đặt để tải xuống ảnh gốc.";
